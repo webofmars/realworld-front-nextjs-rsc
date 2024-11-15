@@ -1,0 +1,15 @@
+.node_lint:
+  image: node:18-alpine
+  stage: lint
+  before_script:
+  script:
+    - |
+        set -x
+        echo "+ install dependencies"
+        npm install
+        echo "+ lint"
+        npm run lint
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - node_modules/

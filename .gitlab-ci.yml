@@ -1,0 +1,23 @@
+stages:
+  - lint
+  # - test
+  # - build
+  # - release
+  # - deploy
+
+variables:
+  GIT_DEPTH: 10
+  DOCKER_DRIVER: overlay2
+  DOCKER_BUILDKIT: 1
+  DOCKER_HOST: tcp://docker:2376
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_TLS_VERIFY: 1
+  DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+  GIT_USER_EMAIL: "gitlab@example.com"
+  GIT_USER_NAME: "gitlab-CI"
+
+image: node:18
+
+include:
+  - local: ".gitlab-ci/actions/**.yaml"
+  - local: ".gitlab-ci/workflows/**.yaml"

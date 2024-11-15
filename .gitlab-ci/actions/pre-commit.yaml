@@ -1,0 +1,22 @@
+.pre-commit:
+  stage: lint
+  image: python:3.13
+  variables:
+    VERSION: 4.0.1
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - ~/.cache/pip
+  script:
+    - |
+        set -x
+        echo "+ install pre-commit"
+        pip install pre-commit==${VERSION}
+        if [ ! -f "pre-commit-config.yaml" ]; then
+          echo "warning: no config file found"
+          echo "using the default configuration"
+          pre-commit sample-config > .pre-commit-config.yaml
+          pre-commit autoupdate
+        fi
+        echo "+ run pre-commit"
+        pre-commit run --all-files

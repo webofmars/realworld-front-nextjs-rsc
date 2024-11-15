@@ -1,0 +1,20 @@
+# ----------------------------------------------------
+# when to trigger the pipeline:
+# - when a commit is pushed to a branch
+# ----------------------------------------------------
+# what we want to do:
+# run linters
+# run tests
+
+pre_commit:
+  extends: .pre-commit
+  allow_failure:
+    exit_codes:
+      - 1
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+
+node_lint:
+  extends: .node_lint
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"

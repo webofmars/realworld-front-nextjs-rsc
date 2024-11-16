@@ -1,0 +1,77 @@
+---
+dryRun: false
+preset: extended
+releaseLenient: true
+releasePrefix: ''
+scheme: "SEMVER"
+summary: true
+verbosity: "INFO"
+stateFile: ".nyx-state.yml"
+
+# how we access the repository (for changelog and tags)
+git:
+  remotes:
+    origin:
+      authenticationMethod: USER_PASSWORD
+      user: "{{#environmentVariable}}GITLAB_TOKEN{{/environmentVariable}}"
+      password: "{{#environmentVariable}}GITLAB_TOKEN{{/environmentVariable}}"
+
+# how we access the gitlab API (for crreating releases)
+services:
+  gitlab:
+    type: GITLAB
+    options:
+      AUTHENTICATION_TOKEN: "{{#environmentVariable}}GITLAB_TOKEN{{/environmentVariable}}"
+      REPOSITORY_NAME: "{{#environmentVariable}}CI_PROJECT_NAME{{/environmentVariable}}"
+      REPOSITORY_OWNER: "{{#environmentVariable}}CI_PROJECT_NAMESPACE{{/environmentVariable}}"
+
+# how we format the changelog
+changelog:
+  append: "head"
+  path: "CHANGELOG.md"
+  template: https://raw.githubusercontent.com/mooltiverse/nyx/main/modules/java/main/src/main/resources/changelog.tpl
+  sections:
+    "Added": "^feat$"
+    "Fixed": "^fix$"
+    "Refactored": "^refactor$"
+    "Minor Changes": "^chore$"
+    "CI": "^ci$"
+    "Docs": "^docs$"
+
+# how we format the commit messages
+commitMessageConventions:
+  enabled:
+    - conventionalCommits
+
+# what to do for a release
+releaseTypes:
+  enabled:
+    - mainline
+    - branches
+  publicationServices:
+    - gitlab
+  items:
+    mainline:
+      collapseVersions: false
+      description: "{{#fileContent}}CHANGELOG.md{{/fileContent}}"
+      gitPush: true
+      gitTag: true
+      matchBranches: "^(master|main)$"
+      publish: true
+      publishDraft: true
+    branches:
+      collapseVersions: true
+      collapsedVersionQualifier: "{{#environmentVariable}}CI_COMMIT_REF_SLUG{{/environmentVariable}}"
+      description: "{{#fileContent}}CHANGELOG.md{{/fileContent}}"
+      gitPush: true
+      gitTag: true
+      publish: true
+      publishDraft: true
+
+# what files to attach to the release
+# releaseAssets:
+#   changelog:
+#     path: "CHANGELOG.md"
+#     fileName: "Changelog"
+#     type: "text/markdown"
+#     description: "Changelog of the release"

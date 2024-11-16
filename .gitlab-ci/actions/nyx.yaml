@@ -1,0 +1,49 @@
+.nyx_infer:
+  stage: release
+  image:
+    name: mooltiverse/nyx:3.0.11
+    entrypoint: [""]
+  variables:
+    GIT_STRATEGY: clone
+    GIT_DEPTH: "0"
+    EXTRA_ARGS: ""
+    PROJECT_ROOT: "${CI_PROJECT_DIR}"
+  script:
+    - |
+        set -x
+        git fetch --all
+        git checkout "${CI_COMMIT_REF_NAME}"
+        echo "+ run nyx infer"
+        nyx infer \
+          --directory="${PROJECT_ROOT}" ${EXTRA_ARGS}
+  artifacts:
+    when: always
+    paths:
+      - .nyx-state.yml
+
+.nyx_release:
+  stage: release
+  image:
+    name: mooltiverse/nyx:3.0.11
+    entrypoint: [""]
+  variables:
+    GIT_STRATEGY: clone
+    GIT_DEPTH: "0"
+    EXTRA_ARGS: ""
+    PROJECT_ROOT: "${CI_PROJECT_DIR}"
+  script:
+    - |
+        set -x
+        echo "+ run nyx publish"
+        git remote -v
+        git fetch --all
+        git checkout "${CI_COMMIT_REF_NAME}"
+        [ -z "${GITLAB_TOKEN}" ] && echo "ERROR: GITLAB_TOKEN is not set" && exit 1
+        echo "DEBUG: GITLAB_TOKEN ending is: ${GITLAB_TOKEN: -3}"
+        nyx publish \
+          --directory="${PROJECT_ROOT}" --resume=true \
+          ${EXTRA_ARGS}
+  artifacts:
+    when: always
+    paths:
+      - .nyx-state.yml

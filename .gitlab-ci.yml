@@ -1,8 +1,8 @@
 stages:
   - lint
   # - test
-  # - build
-  # - release
+  - build
+  - release
   # - deploy
 
 variables:

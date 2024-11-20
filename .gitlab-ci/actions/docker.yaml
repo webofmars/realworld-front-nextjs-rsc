@@ -1,0 +1,112 @@
+.docker_build:
+  stage: release
+  image: docker:27.3
+  services:
+    - name: docker:27.3-dind
+      alias: docker
+  variables:
+    # the following variables are required
+    # IMAGE_NAME: ""
+    # REGISTRY_USER: ""
+    # REGISTRY_PASSWORD: ""
+    # REGISTRY_FQDN: ""
+    DOCKER_CONTEXT: "."
+    DOCKERFILE: "Dockerfile"
+    PLATFORMS: "linux/amd64"
+    IMAGE_TAG: "latest"
+    BUILD_ARGS: ""
+    TARGET: ""
+  script:
+    - |
+        set -x
+        apk add --no-cache git
+        BUILDX_ARCH="linux-amd64"
+        BUILDX_VERSION="v0.18.0"
+        mkdir -p ~/.docker/cli-plugins && \
+        wget -nv -O ~/.docker/cli-plugins/docker-buildx https://github.com/docker/buildx/releases/download/${BUILDX_VERSION}/buildx-${BUILDX_VERSION}.${BUILDX_ARCH} && \
+        chmod a+x ~/.docker/cli-plugins/docker-buildx
+        # this hack is to avoid error with qemu
+        # cf https://github.com/docker/buildx/issues/314
+        docker pull tonistiigi/binfmt:latest
+        docker run --privileged --rm tonistiigi/binfmt --uninstall qemu-*
+        docker run --privileged --rm tonistiigi/binfmt --install all
+    - |
+        set -x
+        echo "IMAGE_NAME: ${IMAGE_NAME}"
+    - |
+        # determine the image tag based on current context
+        set -x
+        if [ -n "${VERSION}" ]; then
+          IMAGE_TAG="${VERSION}"
+        elif [ -n "${CI_COMMIT_TAG}" ]; then
+          IMAGE_TAG="$(echo "${CI_COMMIT_TAG}" | iconv -f UTF-8 -t US_ASCII | sed -E -e 's/[^[:alnum:]]+/-/g' -e 's/^-+|-+$//g' | tr '[:upper:]' '[:lower:]')"
+        elif [ -n "${CI_COMMIT_SHORT_SHA}" ]; then
+          IMAGE_TAG="${CI_COMMIT_SHORT_SHA}"
+        fi
+        echo "IMAGE_TAG: ${IMAGE_TAG}"
+    - |
+        # waiting for docker services to be ready
+        set -x
+        echo "Wait for Docker daemon at tcp://docker:2376"
+        while ! nc -z docker 2376; do sleep 0.1; done
+    - |
+        # setup buildx
+        set -x
+        echo "Setup buildx"
+        docker context create builder-context
+        docker buildx create --name builderx --driver docker-container --bootstrap --use builder-context
+        docker buildx ls
+    - |
+        # login to the registry
+        set -x
+        echo "Login to the registry"
+        echo "REGISTRY_USER length: ${#REGISTRY_USER}"
+        echo "REGISTRY_PASSWORD length: ${#REGISTRY_PASSWORD}"
+        echo "${REGISTRY_PASSWORD}" | docker login --username "${REGISTRY_USER}" --password-stdin "${REGISTRY_FQDN}"
+    - |
+        # pull possible images that can be used as cache
+        BRANCH_NAME="$(echo $CI_COMMIT_REF_NAME | sed 's/[^a-zA-Z0-9]/-/g' )"
+        if [ "$BRANCH_NAME" = "master" ] ||  [ "$BRANCH_NAME" = "main" ]; then
+          echo "production build, skipping cache for now"
+        else
+          set -x
+          echo "Pull possible images that can be used as cache"
+          PLATFORMS="$(echo ${PLATFORMS} | tr -d ' ')"
+          OLDIFS=$IFS
+          IFS=','
+          for p in $PLATFORMS; do
+            docker pull --platform $p "${IMAGE_NAME}:latest" || true
+            docker pull --platform $p "${IMAGE_NAME}:${IMAGE_TAG}" || true
+            docker pull --platform $p "${IMAGE_NAME}:${CI_COMMIT_REF_SLUG}" || true
+            PLATFORM_ARGS="$PLATFORM_ARGS --platform $p"
+          done
+          IFS=$OLDIFS
+          echo "PLATFORM_ARGS: ${PLATFORM_ARGS}"
+        fi
+    - |
+        # build extra arguments
+        set -x
+        echo "Build extra arguments"
+        if [ -n "${TARGET}" ]; then
+          EXTRAS_ARGS="--target ${TARGET}"
+        fi
+        echo "EXTRAS_ARGS: ${EXTRAS_ARGS}"
+    - |
+        # build the image variants
+        set -x
+        echo "Build the image variants"
+        eval docker buildx build \
+          ${PLATFORM_ARGS} \
+          --pull --push \
+          --cache-from "${IMAGE_NAME}:latest" \
+          --cache-from "${IMAGE_NAME}:${IMAGE_TAG}" \
+          --cache-from "${IMAGE_NAME}:${CI_COMMIT_REF_SLUG}" \
+          --cache-to "type=inline" \
+          ${BUILD_ARGS} \
+          -t "${IMAGE_NAME}:${IMAGE_TAG}" \
+          -t "${IMAGE_NAME}:${CI_COMMIT_REF_SLUG}" \
+          -f ${DOCKERFILE} \
+          ${EXTRAS_ARGS} \
+          "${DOCKER_CONTEXT}"
+    - |
+        docker manifest inspect "${IMAGE_NAME}:${IMAGE_TAG}" || true

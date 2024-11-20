@@ -1,0 +1,31 @@
+# ----------------------------------------------------
+# when to trigger the pipeline:
+# - when a commit is pushed to a branch
+# ----------------------------------------------------
+# what we want to do:
+# check commit message
+# run linters
+# run tests
+
+conventional_commit:
+  extends: .conventional_commit
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+
+pre_commit:
+  extends: .pre-commit
+  allow_failure:
+    exit_codes:
+      - 1
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+
+node_lint:
+  extends: .node_lint
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+
+node_build:
+  extends: .node_build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"

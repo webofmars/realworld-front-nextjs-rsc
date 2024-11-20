@@ -1,0 +1,5 @@
+release:
+  extends: .nyx_release
+  needs: [infer_version]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"

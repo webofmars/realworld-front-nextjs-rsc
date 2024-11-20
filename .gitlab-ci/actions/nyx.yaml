@@ -1,0 +1,61 @@
+.nyx_infer:
+  stage: release
+  image:
+    name: mooltiverse/nyx:3.0.11
+    entrypoint: [""]
+  variables:
+    GIT_STRATEGY: clone
+    GIT_DEPTH: "0"
+    EXTRA_ARGS: ""
+    PROJECT_ROOT: "${CI_PROJECT_DIR}"
+  script:
+    - |
+        set -x
+        echo "+ installing yq"
+        apk add --no-cache yq
+        echo "+ get all git refs"
+        git fetch --all
+        git checkout "${CI_COMMIT_REF_NAME}"
+        echo "+ run nyx infer"
+        nyx infer \
+          --directory="${PROJECT_ROOT}" --resume=true ${EXTRA_ARGS}
+        echo "+ generating env for next jobs"
+        echo VERSION=$(yq eval '.version' .nyx-state.yml) > OUTPUT_ENV
+        cat OUTPUT_ENV
+  cache:
+    key: "${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .nyx-state.yml
+  artifacts:
+    when: always
+    reports:
+      dotenv: OUTPUT_ENV
+    paths:
+      - .nyx-state.yml
+
+.nyx_release:
+  stage: release
+  image:
+    name: mooltiverse/nyx:3.0.11
+    entrypoint: [""]
+  variables:
+    GIT_STRATEGY: clone
+    GIT_DEPTH: "0"
+    EXTRA_ARGS: ""
+    PROJECT_ROOT: "${CI_PROJECT_DIR}"
+  script:
+    - |
+        set -x
+        echo "+ run nyx publish"
+        git remote -v
+        git fetch --all
+        git checkout "${CI_COMMIT_REF_NAME}"
+        [ -z "${GITLAB_TOKEN}" ] && echo "ERROR: GITLAB_TOKEN is not set" && exit 1
+        echo "DEBUG: GITLAB_TOKEN ending is: ${GITLAB_TOKEN: -3}"
+        nyx publish \
+          --directory="${PROJECT_ROOT}" --resume=true \
+          ${EXTRA_ARGS}
+  artifacts:
+    when: always
+    paths:
+      - .nyx-state.yml

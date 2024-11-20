@@ -1,0 +1,20 @@
+.node_build:
+  image: node:18-alpine
+  stage: build
+  before_script:
+  script:
+    - |
+        set -x
+        echo "+ install dependencies"
+        npm install
+        echo "+ build"
+        npm run build
+  artifacts:
+    when: always
+    paths:
+      - .next/
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - node_modules/
+      - .next/cache/

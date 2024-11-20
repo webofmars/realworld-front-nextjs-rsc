@@ -1,0 +1,18 @@
+infer_version:
+  extends: .nyx_infer
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"
+
+docker:
+  extends: .docker_build
+  needs: [infer_version]
+  variables:
+    IMAGE_NAME: $CI_REGISTRY_IMAGE
+    IMAGE_TAG: ""
+    REGISTRY_FQDN: $CI_REGISTRY
+    REGISTRY_USER: $CI_REGISTRY_USER
+    REGISTRY_PASSWORD: $CI_REGISTRY_PASSWORD
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"

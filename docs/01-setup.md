@@ -3,7 +3,7 @@
 ## setup
 
 ```sh
-npm install --dev
+  npm install --include=dev
 cp .env.example .env and customize it
 ```
 

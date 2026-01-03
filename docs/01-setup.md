@@ -3,8 +3,8 @@
 ## setup
 
 ```sh
-  npm install --include=dev
-cp .env.example .env and customize it
+npm install --include=dev
+cp .env.example .env (and customize it with your own IP)
 ```
 
 ## run

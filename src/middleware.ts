@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "./utils/auth/session";
+import { fetchCurrentUser } from "./modules/features/auth/fetch/fetchCurrentUser";
 import { securityConfig } from "./config/security";
 import {
   getClientIp,
@@ -82,6 +83,16 @@ const middleware = async (req: NextRequest) => {
 
   // Log successful request
   if (securityConfig.enableRequestLogging) {
+    // `session` is just the opaque auth token, not a user object, so the
+    // username (if needed for the log) has to be resolved via the API.
+    // The `.catch()` guards against the log enrichment ever blocking or
+    // breaking the request if the API is unreachable.
+    const username = session
+      ? await fetchCurrentUser()
+          .then((user) => user.username)
+          .catch(() => undefined)
+      : undefined;
+
     // Note: In middleware, we can't know the final response status
     // This logs the request processing, actual status will be 200 for Next()
     logRequest({
@@ -93,7 +104,7 @@ const middleware = async (req: NextRequest) => {
       userAgent: req.headers.get("user-agent") || "-",
       referer: req.headers.get("referer") || "-",
       timestamp: new Date(),
-      user: session?.user?.username || "-",
+      user: username || "-",
     });
   }
 

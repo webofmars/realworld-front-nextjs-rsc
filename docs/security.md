@@ -27,6 +27,11 @@ ENABLE_REQUEST_LOGGING=true
 ENABLE_GEOFENCING=true
 COUNTRY_WHITELIST=FR,BE,CH
 GEOFENCING_API_URL=http://ip-api.com/json
+
+# Geofencing cache (optional - sane defaults provided)
+GEOFENCING_CACHE_DIR=.next/cache/geofencing
+GEOFENCING_CACHE_TTL_MS=86400000
+GEOFENCING_CACHE_NEGATIVE_TTL_MS=60000
 ```
 
 ## Features
@@ -105,16 +110,53 @@ Use ISO 3166-1 alpha-2 codes (2-letter country codes):
 - etc.
 
 **Important Notes:**
-- Makes external API calls (1 per request from new IP)
+- External API calls are cached (see "Geofencing cache" below): only the first
+  request for a given public IP hits ip-api.com
 - Free tier limit: 45 requests/minute on ip-api.com
 - 3-second timeout for API calls
-- Consider rate limiting or caching for production
-- Localhost IPs skip geofencing
+- Private and IANA-reserved IPs (localhost, `127.0.0.0/8`, `10.0.0.0/8`,
+  `172.16.0.0/12`, `192.168.0.0/16`, CGNAT `100.64.0.0/10`, link-local,
+  `::1`, `fc00::/7`, `fe80::/10`, documentation/multicast/reserved ranges,
+  IPv4-mapped IPv6, ...) are **always allowed** and never sent to the
+  geolocation provider
+
+**How it works:**
+
+The Edge middleware has no filesystem access, so geolocation resolution is
+delegated to an internal route handler running in the Node.js runtime:
+
+1. Middleware checks the client IP. Private/reserved IPs bypass geofencing.
+2. For public IPs, the middleware calls `GET /api/geofence?ip=<ip>` on the
+   app itself (loopback URL, configurable via `GEOFENCING_INTERNAL_URL`).
+3. The route handler resolves the country using a two-tier cache (below) and
+   only calls the third-party API on a cache miss.
+
+**Geofencing cache:**
+
+Two-tier cache to respect the third-party rate limit:
+1. **In-memory** (per-process Map, fastest)
+2. **Filesystem** in `GEOFENCING_CACHE_DIR` (default `.next/cache/geofencing`,
+   next to the other Next.js caches - survives restarts)
+
+Each entry is stored as JSON (`{"countryCode": "FR", "expiresAt": ...}`) in a
+file named after the SHA-256 of the IP. Writes are atomic (temp file + rename).
+Failed lookups (API error, rate limiting) are also cached, but with the much
+shorter `GEOFENCING_CACHE_NEGATIVE_TTL_MS`, so an unavailable API is not hit
+on every request.
+
+```bash
+GEOFENCING_CACHE_DIR=.next/cache/geofencing   # cache location
+GEOFENCING_CACHE_TTL_MS=86400000              # successful lookups (24h)
+GEOFENCING_CACHE_NEGATIVE_TTL_MS=60000        # failed lookups (1min)
+GEOFENCING_INTERNAL_URL=                      # override the internal resolver URL
+```
 
 **Production Recommendations:**
 - Use a paid geolocation service with higher limits
-- Implement caching for IP → country lookups
+- Increase `GEOFENCING_CACHE_TTL_MS` (IP → country mappings rarely change)
 - Use self-hosted GeoIP database (e.g., MaxMind GeoLite2)
+- Note: the filesystem cache is per-instance; with multiple replicas each one
+  keeps its own cache
 
 ## Testing
 
@@ -159,7 +201,7 @@ COUNTRY_WHITELIST=FR,BE
 
 2. Visit the site - access depends on your country
 
-**Note:** Localhost IPs bypass geofencing, so you may need to test from a real IP address or use a proxy.
+**Note:** Private/reserved IPs bypass geofencing, so you may need to test from a real IP address or use a proxy (or send an `X-Forwarded-For` header with a public IP in development).
 
 ## Production Deployment
 

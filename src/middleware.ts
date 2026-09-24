@@ -5,6 +5,7 @@ import { securityConfig } from "./config/security";
 import {
   getClientIp,
   isIpWhitelisted,
+  isPrivateOrReservedIp,
   getCountryFromIp,
   isCountryWhitelisted,
 } from "./utils/security/ipUtils";
@@ -43,11 +44,15 @@ const middleware = async (req: NextRequest) => {
   }
 
   // Geofencing check (optional, only if enabled)
-  if (securityConfig.enableGeofencing) {
-    const countryCode = await getCountryFromIp(
-      clientIp,
-      securityConfig.geofencingApiUrl
-    );
+  // Private/reserved IPs (localhost, LAN, IANA special-use ranges) are always
+  // allowed and never sent to the geolocation provider.
+  if (securityConfig.enableGeofencing && !isPrivateOrReservedIp(clientIp)) {
+    // An undetectable IP resolves to no country → denied (when a whitelist
+    // is configured), but no external lookup is wasted on it.
+    const countryCode =
+      clientIp === "unknown"
+        ? null
+        : await getCountryFromIp(clientIp, securityConfig.geofencingInternalUrl);
     if (!isCountryWhitelisted(countryCode, securityConfig.countryWhitelist)) {
       console.warn(
         `Access denied for IP: ${clientIp} from country: ${countryCode || "unknown"}`
